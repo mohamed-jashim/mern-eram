@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto"); // ✅ ADDED
 const { hashPassword, hashExistingPassword } = require("../lib/bcrypt");
 const { logger } = require("../utils/logger");
 const { sendConfirmationMail } = require("../services/emails/post");
@@ -8,14 +9,14 @@ const UserSchema = new mongoose.Schema(
     // Main Information
     uuid: {
       type: String,
-      default: crypto.randomUUID(),
+      default: () => crypto.randomUUID(), // ✅ FIXED
     },
     firstName: {
       type: String,
       required: false,
       trim: true,
-      minlength: 1, // Enforce a minimum length
-      maxlength: 50, // Enforce a maximum length
+      minlength: 1,
+      maxlength: 50,
     },
     lastName: {
       type: String,
@@ -33,7 +34,7 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       unique: true,
       sparse: true,
-      lowercase: true, // Convert email to lowercase for consistency
+      lowercase: true,
       validate: {
         validator: (email) =>
           /^((?!\.)[\w\-_.]*[^.])(@\w+)(\.\w+(\.\w+)?[^.\W])$/gm.test(email),
@@ -46,7 +47,6 @@ const UserSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       match: [
-        /* Detects most of the phone numbers all over the world */
         /(?:([+]\d{1,4})[-.\s]?)?(?:[(](\d{1,3})[)][-.\s]?)?(\d{1,4})[-.\s]?(\d{1,4})[-.\s]?(\d{1,9})/g,
         "Please provide a valid phone number.",
       ],
@@ -54,7 +54,7 @@ const UserSchema = new mongoose.Schema(
 
     // Address Information
     address: {
-      type: mongoose.Schema.Types.Mixed, // redundant but good to know.
+      type: mongoose.Schema.Types.Mixed,
       properties: {
         street: { type: String, trim: true },
         city: { type: String, trim: true },
@@ -80,11 +80,13 @@ const UserSchema = new mongoose.Schema(
 
     // User Details
     dateOfBirth: { type: Date },
-    urls: [{
-      type: String,
-      trim: true,
-    }],
-    avatar: { type: String, trim: true }, // Store the path to the avatar image,
+    urls: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    avatar: { type: String, trim: true },
 
     // Preferences
     language: { type: String, trim: true },
@@ -94,7 +96,7 @@ const UserSchema = new mongoose.Schema(
     timeFormat: { type: String, trim: true },
 
     // Roles and Permissions
-    role: { type: String, enum: ["admin", "user", "editor"] }, // Define allowed roles },
+    role: { type: String, enum: ["admin", "user", "editor"] },
 
     // Account Management
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -102,7 +104,7 @@ const UserSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     verified: { type: Boolean, default: false },
 
-    // Additional Information and preferences Inshaa'Allah
+    // Additional Information
     alias: { type: String, trim: true },
     grouping: { type: String, trim: true },
     sortOrder: { type: String, trim: true },
@@ -122,14 +124,10 @@ const UserSchema = new mongoose.Schema(
   },
 );
 
-// Before saving the user to the database,
-// Both at regisration, creation and update.
-// Hash the plain password:
+// Hooks
 UserSchema.pre("save", hashPassword);
 UserSchema.pre("updateOne", hashExistingPassword);
 
-// After saving the new user, i.e. registering,
-// Send a confirmation email...
 UserSchema.post("save", sendConfirmationMail);
 UserSchema.post("save", (doc, next) => {
   logger.log("info", `User saved with ID: ${doc._id}`);
